@@ -38,7 +38,7 @@ namespace Infrastructure
                         Date = date,
                         Amount = (decimal)amount,
                         Type = type,
-                        Description = type == TransactionType.Income ? "Доход #" + i : "Расход #" + i
+                        Description = type == TransactionType.Income ? $"Доход #{i}" : $"Расход #{i}"
                     });
                 }
             }

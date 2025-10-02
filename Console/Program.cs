@@ -1,6 +1,5 @@
 ﻿using Application.Interfaces;
 using Application.Services;
-using Domain.Entities;
 using Domain.Enums;
 using Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -12,13 +11,9 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        var dbFile = Path.Combine(AppContext.BaseDirectory, "finance.db");
-
-        if (File.Exists(dbFile))
-        {
-            File.Delete(dbFile);
-            WriteLine("Старая база удалена.");
-        }
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
+        var dbFile = Path.Combine(repoRoot, "Database", "finance.db");
+        WriteLine("Используемый файл базы: " + dbFile);
 
         using var host = Host.CreateDefaultBuilder(args)
             .ConfigureServices((ctx, services) =>
@@ -38,50 +33,10 @@ class Program
         WriteLine("Миграции применены.");
 
         WriteLine("Генерируем тестовые данные...");
-        GenerateTestData(dbContext);
-        WriteLine("Тестовые данные добавлены.\n");
+        dbContext.SeedTestData();
+        WriteLine("Тестовые данные добавлены.");
 
         await RunReportAsync(dbContext, financeService);
-    }
-
-    static void GenerateTestData(FinanceDbContext db)
-    {
-        if (db.Wallets.Any()) return;
-
-        var rnd = new Random();
-
-        var wallets = new List<Wallet>
-        {
-            new Wallet { Id = Guid.NewGuid(), Name = "Основной", Currency = "USD", InitialBalance = 500m },
-            new Wallet { Id = Guid.NewGuid(), Name = "Карта", Currency = "EUR", InitialBalance = 1000m },
-            new Wallet { Id = Guid.NewGuid(), Name = "Наличные", Currency = "RUB", InitialBalance = 10000m },
-        };
-
-        db.Wallets.AddRange(wallets);
-        db.SaveChanges();
-
-        foreach (var wallet in wallets)
-        {
-            for (int i = 0; i < 50; i++)
-            {
-                var type = rnd.Next(0, 2) == 0 ? TransactionType.Income : TransactionType.Expense;
-                var amount = Math.Round(rnd.NextDouble() * 500 + 10, 2); // от 10 до 510
-                var daysAgo = rnd.Next(0, 90);
-                var date = DateTime.UtcNow.AddDays(-daysAgo);
-
-                db.Transactions.Add(new Transaction
-                {
-                    Id = Guid.NewGuid(),
-                    WalletId = wallet.Id,
-                    Date = date,
-                    Amount = (decimal)amount,
-                    Type = type,
-                    Description = type == TransactionType.Income ? $"Доход #{i}" : $"Расход #{i}"
-                });
-            }
-        }
-
-        db.SaveChanges();
     }
 
     static async Task RunReportAsync(FinanceDbContext dbContext, IFinanceService financeService)
