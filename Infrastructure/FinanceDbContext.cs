@@ -1,5 +1,4 @@
 ﻿using Domain.Entities;
-using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure
@@ -38,40 +37,6 @@ namespace Infrastructure
                 builder.Property(t => t.Description).HasMaxLength(1000);
                 builder.Property(t => t.Type).HasConversion<int>();
             });
-        }
-
-        public static void Seed(FinanceDbContext db)
-        {
-            if (!db.Wallets.Any())
-            {
-                var wallet1 = new Wallet
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "Основной",
-                    Currency = "USD",
-                    InitialBalance = 500m
-                };
-                var wallet2 = new Wallet
-                {
-                    Id = Guid.NewGuid(),
-                    Name = "Карта",
-                    Currency = "EUR",
-                    InitialBalance = 1000m
-                };
-                db.Wallets.AddRange(wallet1, wallet2);
-                db.SaveChanges();
-
-                db.Transactions.Add(new Transaction
-                {
-                    Id = Guid.NewGuid(),
-                    WalletId = wallet1.Id,
-                    Date = DateTimeOffset.UtcNow.AddDays(-2),
-                    Amount = 50m,
-                    Type = TransactionType.Expense,
-                    Description = "Продукты"
-                });
-                db.SaveChanges();
-            }
         }
     }
 }

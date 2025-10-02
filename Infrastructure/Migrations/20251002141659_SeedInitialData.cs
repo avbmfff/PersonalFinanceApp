@@ -32,7 +32,7 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     WalletId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Date = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
+                    Date = table.Column<DateTime>(type: "TEXT", nullable: false),
                     Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Type = table.Column<int>(type: "INTEGER", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)

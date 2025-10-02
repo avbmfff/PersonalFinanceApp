@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(FinanceDbContext))]
-    [Migration("20251002123441_SeedInitialData")]
+    [Migration("20251002141659_SeedInitialData")]
     partial class SeedInitialData
     {
         /// <inheritdoc />
@@ -29,7 +29,7 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTimeOffset>("Date")
+                    b.Property<DateTime>("Date")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")

@@ -11,7 +11,7 @@ namespace Domain.Entities
         public Guid WalletId { get; set; }
         public Wallet Wallet { get; set; } = null!;
 
-        public DateTimeOffset Date { get; set; }
+        public DateTime Date { get; set; }
 
         [Column(TypeName = "decimal(18,2)")] public decimal Amount { get; set; }
 

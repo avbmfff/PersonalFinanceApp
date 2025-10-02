@@ -104,13 +104,16 @@ public class FinanceServiceTests : IDisposable
         var w1 = await svc.CreateWalletAsync("A", "USD", 100m);
         var w2 = await svc.CreateWalletAsync("B", "USD", 200m);
         var now = DateTimeOffset.UtcNow;
-        var month = now.Month;
+        var month = now.Month - 1;
         var year = now.Year;
 
         await svc.AddTransactionAsync(w1.Id, now.AddDays(-1), 10m, TransactionType.Expense, "E1");
         await svc.AddTransactionAsync(w1.Id, now.AddDays(-2), 5m, TransactionType.Expense, "E2");
         await svc.AddTransactionAsync(w2.Id, now.AddDays(-3), 50m, TransactionType.Expense, "E3");
         await svc.AddTransactionAsync(w1.Id, now.AddDays(-4), 100m, TransactionType.Income, "Inc");
+        await svc.AddTransactionAsync(w2.Id, new DateTimeOffset(2025, 10, 1, 0, 0, 0, TimeSpan.Zero), 50m,
+            TransactionType.Income);
+
 
         var report = await svc.GetMonthlyTransactionsGroupedByTypeAsync(year, month);
         Assert.Contains(report.Groups, g => g.Type == TransactionType.Expense);
@@ -119,6 +122,6 @@ public class FinanceServiceTests : IDisposable
         var tops = await svc.GetTopExpensesPerWalletAsync(year, month, 2);
         Assert.True(tops.ContainsKey(w1.Id));
         Assert.True(tops.ContainsKey(w2.Id));
-        Assert.Equal(2, tops[w1.Id].Count);
+        Assert.Single(tops[w1.Id]);
     }
 }

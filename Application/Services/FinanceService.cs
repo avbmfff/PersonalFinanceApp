@@ -26,8 +26,6 @@ namespace Application.Services
             if (string.IsNullOrWhiteSpace(currency) || !IsoCurrencyRegex.IsMatch(currency.ToUpperInvariant()))
                 throw new ArgumentException("Currency must be ISO 3-letter code (e.g. USD).", nameof(currency));
             if (initialBalance < 0) throw new InvalidAmountException(initialBalance);
-            if (!CurrencyValidator.IsValid(currency))
-                throw new ArgumentException($"Unsupported currency code: {currency}", nameof(currency));
 
             var wallet = new Wallet
             {
@@ -37,15 +35,8 @@ namespace Application.Services
                 InitialBalance = decimal.Round(initialBalance, 2)
             };
 
-            try
-            {
-                _dbContext.Wallets.Add(wallet);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateException ex)
-            {
-                throw new DataAccessException("Failed to create wallet.", ex);
-            }
+            _dbContext.Wallets.Add(wallet);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             return new WalletDto
             {
@@ -61,12 +52,10 @@ namespace Application.Services
         {
             if (amount <= 0) throw new InvalidAmountException(amount);
 
-            var wallet = await _dbContext.Wallets
-                .AsNoTracking()
+            var wallet = await _dbContext.Wallets.AsNoTracking()
                 .FirstOrDefaultAsync(w => w.Id == walletId, cancellationToken);
             if (wallet == null) throw new WalletNotFoundException(walletId);
 
-            // aggregate in DB
             var aggregates = await _dbContext.Transactions
                 .Where(t => t.WalletId == walletId)
                 .GroupBy(t => 1)
@@ -86,27 +75,19 @@ namespace Application.Services
             {
                 Id = Guid.NewGuid(),
                 WalletId = walletId,
-                Date = date,
+                Date = date.Date,
                 Amount = decimal.Round(amount, 2),
                 Type = type,
                 Description = description
             };
 
-            try
-            {
-                _dbContext.Transactions.Add(transaction);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateException ex)
-            {
-                throw new DataAccessException("Failed to add transaction.", ex);
-            }
+            _dbContext.Transactions.Add(transaction);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<decimal> GetCurrentBalanceAsync(Guid walletId, CancellationToken cancellationToken = default)
         {
-            var wallet = await _dbContext.Wallets
-                .AsNoTracking()
+            var wallet = await _dbContext.Wallets.AsNoTracking()
                 .FirstOrDefaultAsync(w => w.Id == walletId, cancellationToken);
             if (wallet == null) throw new WalletNotFoundException(walletId);
 
@@ -120,45 +101,41 @@ namespace Application.Services
                 })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            var currentBalance = wallet.InitialBalance + (aggregates?.Incomes ?? 0) - (aggregates?.Expenses ?? 0);
-            return decimal.Round(currentBalance, 2);
+            return decimal.Round(wallet.InitialBalance + (aggregates?.Incomes ?? 0) - (aggregates?.Expenses ?? 0), 2);
         }
 
         public async Task<MonthlyTransactionsReport> GetMonthlyTransactionsGroupedByTypeAsync(int year, int month,
             CancellationToken cancellationToken = default)
         {
-            var start = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var end = start.AddMonths(1);
+            var startDate = new DateTime(year, month, 1, 0, 0, 0);
+            var endDate = startDate.AddMonths(1);
 
-            // Для SQLite сначала загружаем все транзакции в память
-            var allTransactions = await _dbContext.Transactions
+            var transactions = await _dbContext.Transactions
                 .AsNoTracking()
-                .ToListAsync(cancellationToken);
+                .Where(t => t.Date >= startDate && t.Date < endDate)
+                .OrderBy(t => t.Date)
+                .Select(t => new TransactionDto
+                {
+                    Id = t.Id,
+                    WalletId = t.WalletId,
+                    Date = t.Date,
+                    Amount = t.Amount,
+                    Type = t.Type.ToString(),
+                    Description = t.Description
+                })
+                .ToListAsync();
 
-            var transactions = allTransactions
-                .Where(t => t.Date.UtcDateTime >= start && t.Date.UtcDateTime < end)
-                .OrderBy(t => t.Date.UtcDateTime)
-                .ToList();
 
             var groups = transactions
-                .GroupBy(t => t.Type)
+                .GroupBy(t => Enum.Parse<TransactionType>(t.Type))
                 .Select(g =>
                 {
                     var total = g.Sum(t => t.Amount);
-                    var ordered = g.OrderBy(t => t.Date.UtcDateTime)
-                        .Select(t => new TransactionDto
-                        {
-                            Id = t.Id,
-                            WalletId = t.WalletId,
-                            Date = t.Date,
-                            Amount = t.Amount,
-                            Type = t.Type.ToString(),
-                            Description = t.Description
-                        })
-                        .ToList()
-                        .AsReadOnly();
-
-                    return new TransactionGroup(g.Key, decimal.Round(total, 2), ordered);
+                    return new TransactionGroup(
+                        g.Key,
+                        decimal.Round(total, 2),
+                        g.OrderBy(t => t.Date).ToList().AsReadOnly()
+                    );
                 })
                 .OrderByDescending(g => g.TotalAmount)
                 .ToList();
@@ -172,22 +149,17 @@ namespace Application.Services
         }
 
         public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<TransactionDto>>> GetTopExpensesPerWalletAsync(
-            int year,
-            int month, int topN = 3, CancellationToken cancellationToken = default)
+            int year, int month, int topN = 3, CancellationToken cancellationToken = default)
         {
-            var start = new DateTimeOffset(new DateTime(year, month, 1), TimeSpan.Zero);
-            var end = start.AddMonths(1);
+            var startDate = new DateTime(year, month, 1, 0, 0, 0);
+            var endDate = startDate.AddMonths(1);
 
-            var allTransactions = await _dbContext.Transactions
+            var allExpenses = await _dbContext.Transactions
                 .AsNoTracking()
-                .Where(t => t.Type == TransactionType.Expense)
-                .ToListAsync(cancellationToken);
+                .Where(t => t.Type == TransactionType.Expense && t.Date >= startDate && t.Date < endDate)
+                .ToListAsync();
 
-            var transactions = allTransactions
-                .Where(t => t.Date >= start && t.Date < end)
-                .ToList();
-
-            var perWallet = transactions
+            var perWallet = allExpenses
                 .GroupBy(t => t.WalletId)
                 .ToDictionary(
                     g => g.Key,

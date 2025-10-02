@@ -10,9 +10,8 @@ namespace Infrastructure
         public static void SeedTestData(this FinanceDbContext db)
         {
             if (db.Wallets.Any())
-                return; // Уже есть данные
+                return;
 
-            // Создаем кошельки
             var wallets = new List<Wallet>
             {
                 new Wallet { Id = Guid.NewGuid(), Name = "Основной", Currency = "USD", InitialBalance = 500m },
@@ -23,7 +22,6 @@ namespace Infrastructure
             db.Wallets.AddRange(wallets);
             db.SaveChanges();
 
-            // Генерируем транзакции за последние 3 месяца
             foreach (var wallet in wallets)
             {
                 for (int i = 0; i < 50; i++)
@@ -31,7 +29,7 @@ namespace Infrastructure
                     var type = Rnd.Next(0, 2) == 0 ? TransactionType.Income : TransactionType.Expense;
                     var amount = Math.Round(Rnd.NextDouble() * 500 + 10, 2); // от 10 до 510
                     var daysAgo = Rnd.Next(0, 90);
-                    var date = DateTimeOffset.UtcNow.AddDays(-daysAgo);
+                    var date = DateTime.UtcNow.AddDays(-daysAgo);
 
                     db.Transactions.Add(new Transaction
                     {
